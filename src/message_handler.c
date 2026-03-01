@@ -3,34 +3,9 @@
 #include <stdlib.h>
 
 #include "zephyr_time.h"
+#include "crc16_ccitt.h"
 
 #define MAXIMUM_BUFFER_SIZE 512
-
-//******************************************************************************
-// Private functions
-//******************************************************************************
-
-/**
- * @brief Generates the CRC code with polynomial 0x1021
- *
- * @param buffer Data over which the CRC will be calculated
- * @param size Size of the buffer
- * @return uint16_t CRC calculated value
- */
-static uint16_t _crc16(const uint8_t *buffer, size_t size) {
-  uint16_t crc = 0xFFFF;
-  for (size_t i = 0; i < size; ++i) {
-    crc ^= (uint16_t)buffer[i] << 8;
-    for (size_t j = 0; j < 8; ++j) {
-      if (crc & 0x8000) {
-        crc = (crc << 1) ^ 0x1021;
-      } else {
-        crc <<= 1;
-      }
-    }
-  }
-  return crc;
-}
 
 //******************************************************************************
 // Private methods
@@ -93,7 +68,7 @@ static bool MessageHandler_parseAndCheckCrc(MessageHandler *self, const uint8_t 
   if (bufferLength != expectedMessageLength) { return false; }
   MessageHandler_parseBody(self, buffer, bufferLength);
   MessageHandler_parseCrc(self, buffer, bufferLength);
-  uint16_t crc = _crc16(buffer, sizeof(MessageHeader_t)+self->message.header.bodyLength);
+  uint16_t crc = crc16_ccitt_false(buffer, sizeof(MessageHeader_t)+self->message.header.bodyLength);
   if ((self->message.crc[0]==(crc & 0xFF)) && (self->message.crc[1]==(crc >> 8))) {
     return true;
   } else {
@@ -130,7 +105,7 @@ void MessageHandler_send(MessageHandler *self, uint8_t *messageBody,
   uint8_t buffer[messageFullSize];
   memcpy(buffer, &self->message.header, sizeof(MessageHeader_t));
   memcpy(buffer + sizeof(MessageHeader_t), messageBody, messageBodySize);
-  uint16_t crc16 = _crc16(buffer, sizeof(MessageHeader_t)+messageBodySize);
+  uint16_t crc16 = crc16_ccitt_false(buffer, sizeof(MessageHeader_t)+messageBodySize);
   uint8_t crc[MESSAGE_HANDLER_CRC_SIZE] = {crc16 & 0xFF, crc16 >> 8};
   memcpy(buffer + sizeof(MessageHeader_t) + messageBodySize, crc, MESSAGE_HANDLER_CRC_SIZE);
   self->message.header.transactionId++;
